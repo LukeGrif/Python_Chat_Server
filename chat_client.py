@@ -1,16 +1,23 @@
+"""
+Filename: chat_client.py
+Author: Luke Griffin
+Description:
+    Contains the client encrypted chat loop.
+    Uses the shared AES session key (Kabc) to encrypt messages before sending and decrypt messages upon receiving.
+    Interacts with the chat relay server but never exposes plaintext messages to it.
+Date: 2025-04-07
+"""
 
-import socket
-import sys
 import threading
-import time
-from cert_utils import generate_keypair, generate_certificate, serialize_cert, load_cert
-from encryption_utils import encrypt_rsa, decrypt_rsa, compute_hmac, verify_hmac, generate_aes_key, encrypt_aes, decrypt_aes
+from encryption_utils import encrypt_aes, decrypt_aes
 
 HOST = '127.0.0.1'
 PORT = 5000
 
+
 def send_with_length(sock, data):
     sock.send(len(data).to_bytes(4, 'big') + data)
+
 
 def recv_with_length(sock):
     length_bytes = sock.recv(4)
@@ -20,6 +27,7 @@ def recv_with_length(sock):
     if length == 0:
         return None
     return sock.recv(length)
+
 
 def chat_loop(sock, session_key, name):
     def recv_thread():

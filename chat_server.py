@@ -1,3 +1,12 @@
+"""
+Filename: chat_server.py
+Author: Luke Griffin
+Description:
+    A  relay server that forwards encrypted messages between clients.
+    It never decrypts or inspects messages, maintaining end-to-end encryption.
+    Clients connect here after session key setup.
+Date: 2025-04-07
+"""
 
 import socket
 import threading
@@ -8,6 +17,7 @@ PORT = 5001
 clients = []
 lock = threading.Lock()
 
+
 def recv_exactly(sock, size):
     data = b''
     while len(data) < size:
@@ -17,10 +27,12 @@ def recv_exactly(sock, size):
         data += packet
     return data
 
+
 def recv_with_length(sock):
     length_bytes = recv_exactly(sock, 4)
     length = int.from_bytes(length_bytes, 'big')
     return recv_exactly(sock, length)
+
 
 def handle_client(conn, addr):
     print(f"[+] Chat client connected from {addr}")
@@ -34,13 +46,14 @@ def handle_client(conn, addr):
                 for client in clients:
                     if client != conn:
                         client.send(len(msg).to_bytes(4, 'big') + msg)
-    except:
-        pass
+    except Exception as e:
+        return print(f"Error handling_client: {e}")
     finally:
         with lock:
             clients.remove(conn)
         conn.close()
         print(f"[-] Chat client disconnected from {addr}")
+
 
 def main():
     print("[*] Starting secure chat server...")
@@ -51,6 +64,7 @@ def main():
     while True:
         conn, addr = server.accept()
         threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+
 
 if __name__ == "__main__":
     main()

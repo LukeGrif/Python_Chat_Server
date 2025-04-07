@@ -1,8 +1,15 @@
+"""
+Filename: server.py
+Author: Luke Griffin
+Description:
+    Central authority facilitating mutual certificate verification and public key distribution between clients.
+    It also forwards encrypted session keys from Client A to Clients B and C, without having access to the session key.
+Date: 2025-04-07
+"""
 
 import socket
 import threading
 import time
-from cert_utils import generate_keypair, generate_certificate, serialize_cert
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
@@ -13,6 +20,7 @@ clients = {}
 certs = {}
 lock = threading.Lock()
 
+
 def recv_exactly(sock, size):
     data = b''
     while len(data) < size:
@@ -21,6 +29,7 @@ def recv_exactly(sock, size):
             raise ConnectionError("Socket connection broken")
         data += packet
     return data
+
 
 def client_thread(conn, addr):
     try:
@@ -84,6 +93,7 @@ def client_thread(conn, addr):
                     del certs[k]
         conn.close()
 
+
 def main():
     print("[*] Starting server...")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -93,6 +103,7 @@ def main():
     while True:
         conn, addr = server.accept()
         threading.Thread(target=client_thread, args=(conn, addr), daemon=True).start()
+
 
 if __name__ == "__main__":
     main()
