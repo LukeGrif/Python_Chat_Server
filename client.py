@@ -87,6 +87,8 @@ def main(name):
             if len(parts) != 4:
                 raise ValueError("Invalid message format")
             sender, ts, key, mac = parts
+            if abs(time.time() - int(ts)) > 20:
+                raise ValueError(f"Time stamp is out of sync by {abs(time.time() - int(ts))} seconds - potential replay attack")
             valid = verify_hmac(key, b"||".join(parts[:3]), mac)
             print(f"[{name}] Received Kabc value: {key.hex()}")
             print(f"[{name}] Received Kabc from {sender.decode()}: {'OK' if valid else 'INVALID'}")
