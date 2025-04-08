@@ -5,6 +5,9 @@ Description:
     A  relay server that forwards encrypted messages between clients.
     It never decrypts or inspects messages, maintaining end-to-end encryption.
     Clients connect here after session key setup.
+Requirements Addressed:
+    Requirement 1: A, B, and C must not communicate directly.
+    Requirement 6: Server never decrypts chat messages, preserving confidentiality.
 Date: 2025-04-07
 """
 
@@ -19,6 +22,10 @@ lock = threading.Lock()
 
 
 def recv_exactly(sock, size):
+    """
+    Reads exactly `size` bytes from a socket.
+    Raises an error if connection breaks.
+    """
     data = b''
     while len(data) < size:
         packet = sock.recv(size - len(data))
@@ -35,6 +42,14 @@ def recv_with_length(sock):
 
 
 def handle_client(conn, addr):
+    """
+    Handles a new chat client connection.
+    Forwards any encrypted message from this client to all others.
+
+    Args:
+        conn: Client socket
+        addr: Client address
+    """
     print(f"[+] Chat client connected from {addr}")
     with lock:
         clients.append(conn)

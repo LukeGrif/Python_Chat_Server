@@ -5,6 +5,12 @@ Description:
     Manages identity, X.509 certificate exchange, and session key establishment with other clients via a server.py.
     Once session key (Kabc) is securely shared, connects to chat_server.py and enters the AES-encrypted chat loop.
 Date: 2025-04-07
+Requirements Addressed:
+    Requirement 1: No direct A,B,C communication
+    Requirement 2: Certificate generation (X.509)
+    Requirement 4: Authentication using certs
+    Requirement 5: HMAC for key verification
+    Requirement 6: Crypto algorithms — AES, RSA, HMAC
 """
 
 import socket

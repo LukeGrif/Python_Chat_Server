@@ -5,6 +5,11 @@ Description:
     Central authority facilitating mutual certificate verification and public key distribution between clients.
     It also forwards encrypted session keys from Client A to Clients B and C, without having access to the session key.
 Date: 2025-04-07
+Requirements Addressed:
+    Requirement 1: No direct client-to-client messaging
+    Requirement 3: Server stores and distributes certificates
+    Requirement 4: Clients authenticate with their certificate
+    Requirement 6: Encrypted keys/messages forwarded without inspection
 """
 
 import socket
@@ -22,6 +27,10 @@ lock = threading.Lock()
 
 
 def recv_exactly(sock, size):
+    """
+    Reads exactly `size` bytes from a socket.
+    Raises an error if connection breaks.
+    """
     data = b''
     while len(data) < size:
         packet = sock.recv(size - len(data))
@@ -32,6 +41,13 @@ def recv_exactly(sock, size):
 
 
 def client_thread(conn, addr):
+    """
+    Handles a client connection. Receives and stores its certificate.
+    Responds to certificate requests and forwards encrypted session keys.
+    Args:
+        conn: Client socket
+        addr: Client IP/port
+    """
     try:
         name_len = int.from_bytes(recv_exactly(conn, 4), 'big')
         name = recv_exactly(conn, name_len).decode()

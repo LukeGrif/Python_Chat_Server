@@ -5,6 +5,9 @@ Description:
     Contains the client encrypted chat loop.
     Uses the shared AES session key (Kabc) to encrypt messages before sending and decrypt messages upon receiving.
     Interacts with the chat relay server but never exposes plaintext messages to it.
+Requirements Addressed:
+    Requirement 1: A, B, C must not communicate directly; all messages are routed via the server.
+    Requirement 6: Uses AES to maintain confidentiality during chat.
 Date: 2025-04-07
 """
 
@@ -16,10 +19,25 @@ PORT = 5000
 
 
 def send_with_length(sock, data):
+    """
+    Sends data prefixed with a 4-byte length header.
+    Ensures complete message framing over TCP.
+
+    Args:
+        sock: Connected socket object
+        data (bytes): Data to send
+    """
     sock.send(len(data).to_bytes(4, 'big') + data)
 
 
 def recv_with_length(sock):
+    """
+    Receives a complete data frame from a socket, respecting 4-byte length prefix.
+    Args:
+        sock: Connected socket
+    Returns:
+        bytes or None: Full message or None on disconnect
+   """
     length_bytes = sock.recv(4)
     if not length_bytes:
         return None
@@ -30,6 +48,14 @@ def recv_with_length(sock):
 
 
 def chat_loop(sock, session_key, name):
+    """
+    Starts the encrypted chat loop for a user.
+    Handles both reading incoming messages and sending outgoing ones using AES encryption.
+    Args:
+        sock: Socket connected to chat relay server
+        session_key (bytes): Shared AES key (Kabc)
+        name (str): Client identifier (A, B, or C)
+    """
     def recv_thread():
         while True:
             try:
