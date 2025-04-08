@@ -19,6 +19,7 @@ import time
 from cert_utils import generate_keypair, generate_certificate, serialize_cert, load_cert
 from encryption_utils import encrypt_rsa, decrypt_rsa, compute_hmac, verify_hmac, generate_aes_key
 from chat_client import chat_loop
+from chat_client_ui import chat_loop
 
 HOST = '127.0.0.1'
 PORT = 5000
