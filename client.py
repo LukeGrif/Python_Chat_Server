@@ -2,24 +2,17 @@
 Filename: client.py
 Author: Luke Griffin
 Description:
-    Manages identity, X.509 certificate exchange, and session key establishment with other clients via a server.py.
-    Once session key (Kabc) is securely shared, connects to chat_server.py and enters the AES-encrypted chat loop.
+    Manages identity, X.509 certificate exchange, and session key establishment with other clients via a registration_server.py.
+    Once session key (Kabc) is securely shared, connects to relay_server.py and enters the AES-encrypted chat loop.
 Date: 2025-04-07
-Requirements Addressed:
-    Requirement 1: No direct A,B,C communication
-    Requirement 2: Certificate generation (X.509)
-    Requirement 4: Authentication using certs
-    Requirement 5: HMAC for key verification
-    Requirement 6: Crypto algorithms — AES, RSA, HMAC
 """
 
 import socket
 import sys
 import time
-from cert_utils import generate_keypair, generate_certificate, serialize_cert, load_cert
-from encryption_utils import encrypt_rsa, decrypt_rsa, compute_hmac, verify_hmac, generate_aes_key
-from chat_client import chat_loop
-from chat_client_ui import chat_loop
+from utils_cert import generate_keypair, generate_ca, generate_certificate, serialize_cert, load_cert
+from utils_encryption import encrypt_rsa, decrypt_rsa, compute_hmac, verify_hmac, generate_aes_key
+from utils_ui import chat_loop
 
 HOST = '127.0.0.1'
 PORT = 5000
@@ -41,12 +34,14 @@ def recv_with_length(sock):
 
 
 def main(name):
-    priv, pub = generate_keypair()
-    cert = generate_certificate(name, pub, "CA", priv)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((HOST, PORT))
+    ca_priv, ca_cert = generate_ca()  # Generate a shared CA
+    priv, pub = generate_keypair()  # Generate keypair
+    cert = generate_certificate(name, pub, ca_cert, ca_priv)  # Generate a CA-signed certificate
 
-    print(f"[{name}] Connected to server")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Socket connection to register server
+    sock.connect((HOST, PORT))  # Not the chat server yet
+
+    print(f"[{name}] Connected to Server.py")
 
     send_with_length(sock, name.encode())
     send_with_length(sock, serialize_cert(cert))
@@ -55,7 +50,7 @@ def main(name):
         print("[A] Waiting a moment for B and C to connect...")
         time.sleep(4)
 
-        session_key = generate_aes_key()
+        session_key = generate_aes_key()  # Create Mutual Key Kabc
         print(f"[A] Generated Kabc: {session_key.hex()}")
 
         for target in ["B", "C"]:
@@ -81,15 +76,16 @@ def main(name):
     else:
         print(f"[{name}] Waiting for session key from A...")
         time.sleep(3)
-        encrypted = recv_with_length(sock)
+        encrypted = recv_with_length(sock)  # Encrypted Kabc
         try:
-            decrypted = decrypt_rsa(priv, encrypted)
+            decrypted = decrypt_rsa(priv, encrypted)  # Decrypt with private key
             parts = decrypted.split(b"||")
             if len(parts) != 4:
                 raise ValueError("Invalid message format")
             sender, ts, key, mac = parts
             if abs(time.time() - int(ts)) > 20:
-                raise ValueError(f"Time stamp is out of sync by {abs(time.time() - int(ts))} seconds - potential replay attack")
+                raise ValueError(
+                    f"Time stamp is out of sync by {abs(time.time() - int(ts))} seconds (potential replay attack)")
             valid = verify_hmac(key, b"||".join(parts[:3]), mac)
             print(f"[{name}] Received Kabc value: {key.hex()}")
             print(f"[{name}] Received Kabc from {sender.decode()}: {'OK' if valid else 'INVALID'}")

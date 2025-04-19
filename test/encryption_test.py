@@ -10,8 +10,8 @@ Date: 2025-04-07
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from cert_utils import generate_keypair, generate_certificate
-from encryption_utils import generate_aes_key, encrypt_rsa, decrypt_rsa, compute_hmac, verify_hmac
+from utils_cert import generate_keypair, generate_certificate
+from utils_encryption import generate_aes_key, encrypt_rsa, decrypt_rsa, compute_hmac, verify_hmac
 
 # Step 1: Generate keys and certs
 clients = {}

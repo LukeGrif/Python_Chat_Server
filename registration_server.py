@@ -1,15 +1,10 @@
 """
-Filename: server.py
+Filename: registration_server.py
 Author: Luke Griffin
 Description:
     Central authority facilitating mutual certificate verification and public key distribution between clients.
     It also forwards encrypted session keys from Client A to Clients B and C, without having access to the session key.
 Date: 2025-04-07
-Requirements Addressed:
-    Requirement 1: No direct client-to-client messaging
-    Requirement 3: Server stores and distributes certificates
-    Requirement 4: Clients authenticate with their certificate
-    Requirement 6: Encrypted keys/messages forwarded without inspection
 """
 
 import socket
@@ -27,10 +22,6 @@ lock = threading.Lock()
 
 
 def recv_exactly(sock, size):
-    """
-    Reads exactly `size` bytes from a socket.
-    Raises an error if connection breaks.
-    """
     data = b''
     while len(data) < size:
         packet = sock.recv(size - len(data))

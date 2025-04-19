@@ -7,7 +7,7 @@ tmux kill-session -t $SESSION 2>/dev/null
 tmux kill-session -t serverbg 2>/dev/null
 tmux kill-session -t chatbg 2>/dev/null
 
-# Start server.py in background
+# Start registration_server.py in background
 tmux new-session -d -s serverbg "python3 server.py"
 
 # Create main session for Server and Clients

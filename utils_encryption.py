@@ -1,13 +1,10 @@
 """
-Filename: encryption_utils.py
-Author: Luke Griffin
+Filename: utils_encryption.py
+Author: Luke Griffin 21334538, Aaron Smith 21335168, Adam Jarvis 21339767, Nahid Islam 21337063
 Description:
     Provides cryptographic functions for RSA encryption/decryption, AES session key generation,
     AES encryption/decryption, and HMAC computation/verification.
     Ensures confidentiality and integrity during secure messaging.
-Requirements Addressed:
-    Requirement 5: Integrity checks using HMAC
-    Requirement 6: Uses AES for confidentiality, RSA for encryption, and HMAC-SHA256 for integrity/authentication
 Date: 2025-04-07
 """
 

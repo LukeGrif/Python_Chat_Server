@@ -1,22 +1,13 @@
 """
-Filename: chat_client.py
-Author: Luke Griffin
+Filename: utils_ui.py.py
+Author: Aaron Smith 21335168
 Description:
-    Contains the client encrypted chat loop.
-    Uses the shared AES session key (Kabc) to encrypt messages before sending and decrypt messages upon receiving.
-    Interacts with the chat relay server but never exposes plaintext messages to it.
-Requirements Addressed:
-    Requirement 1: A, B, C must not communicate directly; all messages are routed via the server.
-    Requirement 6: Uses AES to maintain confidentiality during chat.
+    Add a GUI for each client
 Date: 2025-04-07
-
-New Filename: chat_client_ui.py
-Modified by Aaron to add a GUI for each client
-Date: 2025-04-08
 """
 
 import threading
-from encryption_utils import encrypt_aes, decrypt_aes
+from utils_encryption import encrypt_aes, decrypt_aes
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTextEdit, QLineEdit, QPushButton,
     QVBoxLayout, QWidget, QHBoxLayout
@@ -140,7 +131,7 @@ def chat_loop(sock, session_key, name):
 
     threading.Thread(target=recv_thread, daemon=True).start()
 
-    print(f"[{name}] Entering secure chat. Type messages below:")
+    print(f"[{name}] Entering secure chat.")
     window.append_message(f"[{name}] Entering secure chat. Type messages below:")
 
     app.exec()

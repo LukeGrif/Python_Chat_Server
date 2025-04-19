@@ -1,13 +1,10 @@
 """
-Filename: chat_server.py
-Author: Luke Griffin
+Filename: relay_server.py
+Author: Luke Griffin 21334538, Aaron Smith 21335168, Adam Jarvis 21339767, Nahid Islam 21337063
 Description:
     A  relay server that forwards encrypted messages between clients.
     It never decrypts or inspects messages, maintaining end-to-end encryption.
     Clients connect here after session key setup.
-Requirements Addressed:
-    Requirement 1: A, B, and C must not communicate directly.
-    Requirement 6: Server never decrypts chat messages, preserving confidentiality.
 Date: 2025-04-07
 """
 

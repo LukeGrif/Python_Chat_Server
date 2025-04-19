@@ -1,12 +1,9 @@
 """
-Filename: cert_utils.py
-Author: Luke Griffin
+Filename: utils_cert.py
+Author: Luke Griffin 21334538, Aaron Smith 21335168, Adam Jarvis 21339767, Nahid Islam 21337063
 Description:
     Handles key pair generation and certificate creation for X.509-based authentication.
-    Implements certificate generation, serialization, and parsing utilities.
-Requirements Addressed:
-    Requirement 2: Each entity (A, B, C, S) has a Public Key Certificate.
-    Requirement 4: Each entity must authenticate to the server using its certificate.
+    Implements certificate generation.
 Date: 2025-04-07
 """
 
@@ -23,38 +20,50 @@ def generate_keypair():
     Returns:
         private_key: The private RSA key
         public_key: The associated public key
-    Implements:
-        Requirement 2: Part of certificate creation needed for encryption/authentication.
     """
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     return private_key, private_key.public_key()
 
 
-def generate_certificate(name: str, pubkey, signer_name: str, signer_private_key):
+def generate_ca():
+    ca_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "CA")])
+    ca_cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(ca_private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.utcnow())
+        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(ca_private_key, hashes.SHA256())
+    )
+    return ca_private_key, ca_cert
+
+
+def generate_certificate(name: str, pubkey, ca_cert, ca_private_key):
     """
     Creates a self-signed X.509 certificate for the given entity using the provided signer.
     Args:
         name (str): Name of the certificate subject
         pubkey: The public key to be embedded in the certificate
-        signer_name (str): Signer name
-        signer_private_key: Signer's private key to sign the certificate
+        ca_cert (str): Signer name
+        ca_private_key: Signer's private key to sign the certificate
     Returns:
         x509.Certificate: The generated certificate
-    Implements:
-        Requirement 2: Each entity has a certificate.
-        Requirement 4: Authentication by cert submission.
     """
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
-        .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, signer_name)]))
+        .issuer_name(ca_cert.subject)
         .public_key(pubkey)
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.datetime.utcnow())
         .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=365))
         .add_extension(x509.SubjectAlternativeName([x509.DNSName(name)]), critical=False)
-        .sign(signer_private_key, hashes.SHA256())
+        .sign(ca_private_key, hashes.SHA256())
     )
     return cert
 
@@ -65,7 +74,7 @@ def serialize_cert(cert):
     Args:
         cert (x509.Certificate): The certificate object to serialize
     Returns:
-        bytes: encoded certificate
+        encoded certificate
     """
     return cert.public_bytes(serialization.Encoding.PEM)
 
