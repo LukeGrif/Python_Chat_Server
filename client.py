@@ -38,7 +38,7 @@ def main(name):
     priv, pub = generate_keypair()  # Generate keypair
     cert = generate_certificate(name, pub, ca_cert, ca_priv)  # Generate a CA-signed certificate
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Socket connection to register server
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Socket connection to registration_server.py
     sock.connect((HOST, PORT))  # Not the chat server yet
 
     print(f"[{name}] Connected to Server.py")
@@ -55,45 +55,48 @@ def main(name):
 
         for target in ["B", "C"]:
             print(f"[A] Requesting cert for {target}")
-            send_with_length(sock, f"CERTREQ:{target}".encode())
-            cert_data = recv_with_length(sock)
-            if not cert_data or not cert_data.startswith(b"-----BEGIN CERTIFICATE-----"):
+            send_with_length(sock, f"CERTREQ:{target}".encode())  # Request Cert
+            cert_data = recv_with_length(sock)  # Recieve Requested Cert
+            if not cert_data or not cert_data.startswith(b"-----BEGIN CERTIFICATE-----"):  # Make sure it's not empty
                 raise ValueError(f"Invalid certificate received for {target}")
             target_cert = load_cert(cert_data)
 
+            # send timestamped session key to B || C
             payload = name.encode() + b"||" + str(int(time.time())).encode() + b"||" + session_key
-            mac = compute_hmac(session_key, payload)
-            encrypted = encrypt_rsa(target_cert.public_key(), payload + b"||" + mac)
+            mac = compute_hmac(session_key, payload)  # HMAC for Integrity and Auth
+            encrypted = encrypt_rsa(target_cert.public_key(), payload + b"||" + mac)  # Encrypts using target pub key
+
             print(f"[A] Sending session key to {target}...")
             send_with_length(sock, f"KEYTO:{target}".encode())
             send_with_length(sock, encrypted)
             print(f"[A] Sent encrypted session key to {target}")
 
-        # A also joins the secure chat
+        # A joins the secure chat
         chat_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         chat_sock.connect(("127.0.0.1", CHAT_PORT))
-        chat_loop(chat_sock, session_key, name)
+        chat_loop(chat_sock, session_key, name)  # A joins chat using session key
+
     else:
         print(f"[{name}] Waiting for session key from A...")
         time.sleep(3)
         encrypted = recv_with_length(sock)  # Encrypted Kabc
         try:
             decrypted = decrypt_rsa(priv, encrypted)  # Decrypt with private key
-            parts = decrypted.split(b"||")
+            parts = decrypted.split(b"||")  # Split
             if len(parts) != 4:
                 raise ValueError("Invalid message format")
-            sender, ts, key, mac = parts
+            sender, ts, session_key, mac = parts
             if abs(time.time() - int(ts)) > 20:
                 raise ValueError(
                     f"Time stamp is out of sync by {abs(time.time() - int(ts))} seconds (potential replay attack)")
-            valid = verify_hmac(key, b"||".join(parts[:3]), mac)
-            print(f"[{name}] Received Kabc value: {key.hex()}")
+            valid = verify_hmac(session_key, b"||".join(parts[:3]), mac)  # Verify HMAC
+            print(f"[{name}] Received Kabc value: {session_key.hex()}")
             print(f"[{name}] Received Kabc from {sender.decode()}: {'OK' if valid else 'INVALID'}")
 
             # Start secure chat after key verification
             chat_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             chat_sock.connect(("127.0.0.1", CHAT_PORT))
-            chat_loop(chat_sock, key, name)
+            chat_loop(chat_sock, session_key, name)  # Use recieved Session Key
 
         except Exception as e:
             print(f"[{name}] Failed to process key: {e}")

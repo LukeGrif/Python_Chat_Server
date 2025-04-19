@@ -72,7 +72,7 @@ def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((HOST, PORT))
     server.listen(5)
-    print(f"[*] Listening on {HOST}:{PORT}")
+    print(f"[*] Listening on {HOST}:{PORT}")  # PORT - 5001
     while True:
         conn, addr = server.accept()
         threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
