@@ -1,0 +1,66 @@
+## Secure Group Chat System
+
+This project implements a secure three-party chat system where clients A, B, and C establish a mutually agreed symmetric session key `Kabc` using key share exchange via a server. The server cannot read any messages — it only forwards them. All communication uses authenticated and encrypted channels.
+
+### Key Features:
+- Mutual key establishment using XOR of three key shares (one per client)
+- Public key authentication with signed nonces and timestamp validation
+- Certificate verification via a local Certificate Authority (CA)
+- Encrypted messaging using AES with HMAC-based integrity
+- Socket-based communication with a GUI interface for clients and the server
+
+---
+
+## Files Overview
+
+### `client.py`
+This is the main client logic. It:
+- Authenticates with the server using a signed nonce
+- Requests certificates for other clients and verifies them using the CA
+- Generates a random key share and encrypts it for each peer using their public key
+- Receives key shares from peers and computes the final session key using XOR
+- Uses the session key to send and receive AES+HMAC encrypted messages
+
+### `server.py`
+The server listens for incoming client connections. It:
+- Verifies client authentication and registers active clients
+- Forwards encrypted key shares and chat messages between clients
+- Caches key shares for clients who have not yet connected and delivers them upon connection
+- Never sees plaintext messages or the final session key
+
+### `utils.py`
+Contains shared helper functions and constants:
+- AES encryption/decryption
+- HMAC calculation and verification
+- Certificate generation and storage
+- Constants for message types (`KEY_SHARE`, `CHAT`)
+
+### `ui.py`
+The launcher script that opens four GUI windows:
+- One for the server (log output)
+- Three for clients A, B, and C
+Each window behaves like a terminal but with a graphical interface. Clients display chat and debug info in real time.
+
+### `certs.pkl`
+A generated file containing all the private keys and certificates for the server and clients, signed by a local Certificate Authority. This is created automatically on first run.
+
+---
+
+## How to Run
+
+1. Ensure all Python requirements are installed:
+   ```
+   pip install cryptography PySide6
+   ```
+
+2. Launch the system from a terminal:
+   ```
+   python ui.py
+   ```
+
+3. Wait for all clients to finish key exchange. Each should print:
+   ```
+   Final session key Kabc = ...
+   ```
+
+4. You can now send secure chat messages between clients.
