@@ -19,6 +19,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.asymmetric import padding as asy_padding
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
 
 # === Optional GUI log callback ===
 log_callback = print  # Default to print unless patched by GUI
@@ -40,22 +41,38 @@ except FileNotFoundError:
     key_s, cert_s = generate_cert("Server", ca_key, ca_cert)
 
     certs = {
-        "CA": ca_cert.public_bytes(x509.Encoding.PEM),
+        "CA": ca_cert.public_bytes(serialization.Encoding.PEM),
         "A": {
-            "key": key_a.private_bytes(x509.Encoding.PEM, x509.PrivateFormat.PKCS8, x509.NoEncryption()),
-            "cert": cert_a.public_bytes(x509.Encoding.PEM),
+            "key": key_a.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_a.public_bytes(serialization.Encoding.PEM),
         },
         "B": {
-            "key": key_b.private_bytes(x509.Encoding.PEM, x509.PrivateFormat.PKCS8, x509.NoEncryption()),
-            "cert": cert_b.public_bytes(x509.Encoding.PEM),
+            "key": key_b.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_b.public_bytes(serialization.Encoding.PEM),
         },
         "C": {
-            "key": key_c.private_bytes(x509.Encoding.PEM, x509.PrivateFormat.PKCS8, x509.NoEncryption()),
-            "cert": cert_c.public_bytes(x509.Encoding.PEM),
+            "key": key_c.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_c.public_bytes(serialization.Encoding.PEM),
         },
         "S": {
-            "key": key_s.private_bytes(x509.Encoding.PEM, x509.PrivateFormat.PKCS8, x509.NoEncryption()),
-            "cert": cert_s.public_bytes(x509.Encoding.PEM),
+            "key": key_s.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_s.public_bytes(serialization.Encoding.PEM),
         },
     }
 
