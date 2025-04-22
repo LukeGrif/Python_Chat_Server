@@ -1,5 +1,5 @@
 """
-Filename: server.py
+Filename: ui.py
 Author: Luke Griffin 21334538, Aaron Smith 21335168, Adam Jarvis 21339767, Nahid Islam 21337063
 Description:
     GUI launcher for the secure group chat system.
@@ -17,13 +17,58 @@ import socket
 from PySide6.QtWidgets import (QApplication, QWidget, QTextEdit, QVBoxLayout,
                                QLineEdit, QPushButton, QLabel)
 from PySide6.QtCore import Qt
-from utils import aes_encrypt, aes_decrypt, hmac_digest, hmac_verify, load_certs, KEY_SHARE, CHAT
+from utils import aes_encrypt, aes_decrypt, hmac_digest, hmac_verify, load_certs, save_certs, build_ca, generate_cert, KEY_SHARE, CHAT
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 import os
 
 HOST, PORT = '127.0.0.1', 65432
+
+def regenerate_certs():
+    ca_key, ca_cert = build_ca()
+    key_a, cert_a = generate_cert("ClientA", ca_key, ca_cert)
+    key_b, cert_b = generate_cert("ClientB", ca_key, ca_cert)
+    key_c, cert_c = generate_cert("ClientC", ca_key, ca_cert)
+    key_s, cert_s = generate_cert("Server", ca_key, ca_cert)
+
+    certs = {
+        "CA": ca_cert.public_bytes(serialization.Encoding.PEM),
+        "A": {
+            "key": key_a.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_a.public_bytes(serialization.Encoding.PEM),
+        },
+        "B": {
+            "key": key_b.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_b.public_bytes(serialization.Encoding.PEM),
+        },
+        "C": {
+            "key": key_c.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_c.public_bytes(serialization.Encoding.PEM),
+        },
+        "S": {
+            "key": key_s.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_s.public_bytes(serialization.Encoding.PEM),
+        },
+    }
+
+    save_certs(certs)
 
 class ServerWindow(QWidget):
     def __init__(self):
@@ -169,7 +214,7 @@ class ClientWindow(QWidget):
                                          algorithm=hashes.SHA256(), label=None)
                         )
                         self.received_shares[sender] = decrypted
-                        self.chat_display.append(f"⬅️ Received share from {sender}: {decrypted.hex()}")
+                        self.chat_display.append(f" Received share from {sender}: {decrypted.hex()}")
                         self.chat_display.append(f" Keys so far: {list(self.received_shares.keys())}")
                         self.compute_final_key()
                     except Exception as e:
@@ -195,6 +240,8 @@ def start_server_gui(server_win):
     server.run_server()
 
 def run_ui():
+    regenerate_certs()
+
     app = QApplication(sys.argv)
 
     server_gui = ServerWindow()
