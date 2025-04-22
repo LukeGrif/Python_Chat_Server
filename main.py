@@ -1,11 +1,16 @@
+# main.py
+
 """
 Filename: main.py
 Author: Luke Griffin 21334538, Aaron Smith 21335168, Adam Jarvis 21339767, Nahid Islam 21337063
 Description:
-    GUI launcher for the secure group chat system:
-    - Opens four windows: server log, and clients A, B, C
-    - Each client authenticates with the server, exchanges key shares, and chats securely
-    - Real-time, encrypted group messaging with HMAC integrity checks
+    GUI launcher for the secure group chat:
+    - Spins up server-log window + three client windows
+    - Each client:
+        • Authenticates via signed nonce + cert
+        • Exchanges encrypted AES‑key shares over server
+        • Derives a shared AES session key (XOR of shares)
+        • Sends/receives AES‑CBC + HMAC‑SHA256–protected chat
 Date: 21-04-2025
 """
 
@@ -16,19 +21,20 @@ import socket
 import pickle
 import threading
 
-from PySide6.QtWidgets import QApplication, QWidget, QTextEdit, QVBoxLayout, QLineEdit, QPushButton, QLabel
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QTextEdit, QVBoxLayout,
+    QLineEdit, QPushButton, QLabel
+)
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from utils import aes_encrypt, aes_decrypt, hmac_digest, hmac_verify, load_certs, KEY_SHARE, CHAT
 
-# Server connection settings
-HOST = '127.0.0.1'
-PORT = 65432
+HOST, PORT = '127.0.0.1', 65432
 
 class ServerWindow(QWidget):
-    """Window to display server log messages."""
+    """Simple read‑only text view for server logs streamed in via callback."""
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Server Log")
@@ -40,23 +46,30 @@ class ServerWindow(QWidget):
         self.setLayout(layout)
 
     def append_log(self, message):
-        """Append a message to the server log."""
+        """Called by server thread to push new log lines here."""
         self.log_display.append(message)
 
 class ClientWindow(QWidget):
-    """GUI client that handles authentication, key exchange, and encrypted chat."""
+    """
+    Each client instance:
+      1) Loads its RSA cert/key for signing
+      2) Connects & authenticates to server
+      3) Receives peers’ public RSA keys
+      4) Generates a random 16‑byte share and encrypts it to each peer
+      5) Waits for other shares, XORs them → final 16‑byte AES key
+      6) Sends & receives AES‑CBC+HMAC chat messages
+    """
     def __init__(self, client_id):
         super().__init__()
-        self.client_id = client_id
+        self.client_id     = client_id
         self.setWindowTitle(f"Client {client_id}")
         self.resize(400, 300)
 
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        self.input_field = QLineEdit()
-        self.send_button = QPushButton("Send")
+        # -- UI setup --
+        self.chat_display = QTextEdit(); self.chat_display.setReadOnly(True)
+        self.input_field  = QLineEdit()
+        self.send_button  = QPushButton("Send")
         self.send_button.clicked.connect(self.send_message)
-
         layout = QVBoxLayout()
         layout.addWidget(QLabel(f"Client {client_id} Chat"))
         layout.addWidget(self.chat_display)
@@ -64,141 +77,161 @@ class ClientWindow(QWidget):
         layout.addWidget(self.send_button)
         self.setLayout(layout)
 
-        self.sock = None
-        self.private_key = None
-        self.public_keys = {}
-        self.received_shares = {}
-        self.session_key = None
+        # -- Network + crypto state --
+        self.sock            = None
+        self.private_key     = None
+        self.public_keys     = {}  # map peer → RSA public key
+        self.received_shares = {}  # map peer → decrypted share bytes
+        self.session_key     = None
 
+        # Kick off the background protocol
         threading.Thread(target=self._connect_and_run, daemon=True).start()
 
-    def _log(self, message):
-        """Append a line to the chat display."""
-        self.chat_display.append(message)
+    def _log(self, text):
+        """Append to chat display; used for status updates."""
+        self.chat_display.append(text)
 
     def _connect_and_run(self):
-        """Authenticate with server, exchange key shares, and derive session key."""
+        """Authenticate, exchange shares, and derive group key."""
         try:
-            self._log("Starting connection sequence...")
+            self._log("Connecting to server…")
 
-            certs = load_certs()
-            cert_pem = certs[self.client_id]['cert']
+            # Load this client’s cert+key for signing the nonce.
+            certs   = load_certs()
+            cert_pem= certs[self.client_id]['cert']
             key_pem = certs[self.client_id]['key']
             self.private_key = serialization.load_pem_private_key(key_pem, password=None)
 
+            # TCP connect
             self.sock = socket.create_connection((HOST, PORT))
 
-            nonce = os.urandom(16).hex()
+            # Build & sign nonce|timestamp
+            nonce     = os.urandom(16).hex()
             timestamp = time.time()
-            payload = f"{nonce}|{timestamp}".encode()
+            payload   = f"{nonce}|{timestamp}".encode()
             signature = self.private_key.sign(
                 payload,
                 padding.PKCS1v15(),
                 hashes.SHA256()
             )
-            auth_msg = {'nonce': nonce, 'timestamp': timestamp, 'signed_nonce': signature, 'cert': cert_pem}
+            # Send signed challenge + cert
+            auth_msg = {
+                'nonce': nonce,
+                'timestamp': timestamp,
+                'signed_nonce': signature,
+                'cert': cert_pem
+            }
             self.sock.sendall(pickle.dumps(auth_msg))
 
+            # Await “OK” or fail
             if self.sock.recv(1024) != b'OK':
                 self._log("Authentication failed.")
                 return
-            self._log("Authenticated with server.")
+            self._log("Authenticated successfully.")
 
+            # Retrieve each peer’s RSA public key for key‑share encryption
             all_certs = load_certs()
-            for peer in ('A', 'B', 'C'):
+            for peer in ('A','B','C'):
                 if peer != self.client_id:
-                    peer_cert = x509.load_pem_x509_certificate(all_certs[peer]['cert'])
-                    self.public_keys[peer] = peer_cert.public_key()
+                    cert = x509.load_pem_x509_certificate(all_certs[peer]['cert'])
+                    self.public_keys[peer] = cert.public_key()
 
+            # Start listening thread before sending shares
             threading.Thread(target=self._receive_messages, daemon=True).start()
 
-            self._log("Waiting for all clients...")
+            # Little pause to ensure everyone has connected
             time.sleep(3)
 
-            own_share = os.urandom(16)
-            self.received_shares[self.client_id] = own_share
-            self._log(f"Generated own key share: {own_share.hex()}")
-            for peer, pubkey in self.public_keys.items():
-                encrypted_share = pubkey.encrypt(
-                    own_share,
-                    padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
-                )
-                msg = {'type': KEY_SHARE, 'from': self.client_id, 'to': peer, 'encrypted_share': encrypted_share}
-                self.sock.sendall(pickle.dumps(msg))
-                self._log(f"Sent key share to {peer}.")
+            # Generate this client’s 16‑byte random share
+            my_share = os.urandom(16)
+            self.received_shares[self.client_id] = my_share
+            self._log(f"Own share: {my_share.hex()}")
 
+            # Encrypt & send that share to each other peer
+            for peer, pub in self.public_keys.items():
+                enc = pub.encrypt(
+                    my_share,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                )
+                msg = {'type': KEY_SHARE, 'from': self.client_id, 'to': peer, 'encrypted_share': enc}
+                self.sock.sendall(pickle.dumps(msg))
+                self._log(f"Share sent to {peer}")
+
+            # Try to combine all 3 shares via XOR → final AES key
             self._derive_session_key()
 
         except Exception as e:
-            self._log(f"Fatal error: {e}")
+            self._log(f"Protocol error: {e}")
 
     def _derive_session_key(self):
-        """Combine received shares (XOR) to produce final group session key."""
+        """Once all 3 shares are in, XOR‑fold them to form the AES key."""
         if len(self.received_shares) == 3:
             shares = list(self.received_shares.values())
             key = shares[0]
             for s in shares[1:]:
                 key = bytes(a ^ b for a, b in zip(key, s))
             self.session_key = key
-            self._log(f"Derived session key: {key.hex()}")
+            self._log(f"Session key established: {key.hex()}")
 
     def send_message(self):
-        """Encrypt user input and send as CHAT message to server."""
-        if not self.sock or not self.session_key:
+        """AES‑CBC encrypt + HMAC and send chat text to the server."""
+        if not self.session_key:
             return
         plaintext = self.input_field.text()
         self.input_field.clear()
         iv, ct = aes_encrypt(plaintext.encode(), self.session_key)
-        tag = hmac_digest(self.session_key, iv + ct)
-        packet = {'type': CHAT, 'from': self.client_id, 'iv': iv, 'ciphertext': ct, 'hmac': tag}
+        mac    = hmac_digest(self.session_key, iv + ct)
+        packet = {'type': CHAT, 'from': self.client_id, 'iv': iv, 'ciphertext': ct, 'hmac': mac}
         self.sock.sendall(pickle.dumps(packet))
         self._log(f"You: {plaintext}")
 
     def _receive_messages(self):
-        """Listen for incoming KEY_SHARE and CHAT messages from server."""
+        """Continuously read KEY_SHARE or CHAT from server and process."""
         while True:
             try:
-                raw = self.sock.recv(4096)
-                msg = pickle.loads(raw)
-                mtype = msg.get('type')
+                blob = self.sock.recv(4096)
+                msg  = pickle.loads(blob)
+                mtype= msg.get('type')
                 if mtype == KEY_SHARE:
-                    sender = msg['from']
-                    try:
-                        share = self.private_key.decrypt(
-                            msg['encrypted_share'],
-                            padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+                    # Decrypt incoming share
+                    share = self.private_key.decrypt(
+                        msg['encrypted_share'],
+                        padding.OAEP(
+                            mgf=padding.MGF1(hashes.SHA256()),
+                            algorithm=hashes.SHA256(), label=None
                         )
-                        self.received_shares[sender] = share
-                        self._log(f"Received share from {sender}: {share.hex()}")
-                        self._derive_session_key()
-                    except Exception as e:
-                        self._log(f"Failed to decrypt share from {sender}: {e}")
-                elif mtype == CHAT and self.session_key:
+                    )
                     sender = msg['from']
-                    iv = msg['iv']
-                    ct = msg['ciphertext']
-                    tag = msg['hmac']
+                    self.received_shares[sender] = share
+                    self._log(f"Got share from {sender}: {share.hex()}")
+                    self._derive_session_key()
+                elif mtype == CHAT and self.session_key:
+                    # Verify HMAC before decrypt
+                    iv, ct, tag = msg['iv'], msg['ciphertext'], msg['hmac']
                     if hmac_verify(self.session_key, iv + ct, tag):
                         text = aes_decrypt(iv, ct, self.session_key).decode()
-                        self._log(f"{sender}: {text}")
+                        self._log(f"{msg['from']}: {text}")
             except Exception as e:
-                self._log(f"Receive error: {e}")
+                self._log(f"Receive loop error: {e}")
                 break
 
-def start_server_gui(server_window):
-    """Launch the server backend in a thread and pipe logs to GUI."""
-    import server as server_module
-    server_module.log_callback = server_window.append_log
-    server_module.run_server()
+def start_server_gui(win):
+    """Thread entry‑point: hook server.log_callback → GUI and run server."""
+    import server
+    server.log_callback = win.append_log
+    server.run_server()
 
 def run_ui():
-    """Initialize application windows and start event loop."""
+    """Construct GUI windows and launch event loop."""
     app = QApplication(sys.argv)
     server_win = ServerWindow()
-    clients = [ClientWindow(cid) for cid in ('A', 'B', 'C')]
+    clients    = [ClientWindow(c) for c in ('A','B','C')]
     server_win.show()
-    for client in clients:
-        client.show()
+    for c in clients: c.show()
     threading.Thread(target=start_server_gui, args=(server_win,), daemon=True).start()
     sys.exit(app.exec())
 
