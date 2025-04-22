@@ -1,5 +1,5 @@
 """
-Filename: server.py
+Filename: main.py
 Author: Luke Griffin 21334538, Aaron Smith 21335168, Adam Jarvis 21339767, Nahid Islam 21337063
 Description:
     GUI launcher for the secure group chat system.
