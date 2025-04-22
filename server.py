@@ -34,6 +34,10 @@ from utils import (
 # otherwise stdout via print() is used.
 log_callback = print
 
+# Track who’s online and any shares pending delivery
+active_clients = {}       # client_id → socket
+pending_shares = []       # [(to_client, share_message), …]
+
 def log(message):
     """Unified hook for server logging (console or GUI)."""
     log_callback(f"[Server] {message}")
@@ -61,17 +65,6 @@ except FileNotFoundError:
         }
     save_certs(certs)
     log("Certificates generated and saved to certs.pkl.")
-
-# --- Networking setup ---
-HOST, PORT = '127.0.0.1', 65432
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.bind((HOST, PORT))
-server_socket.listen()
-log(f"Listening for clients on {HOST}:{PORT}…")
-
-# Track who’s online and any shares pending delivery
-active_clients = {}       # client_id → socket
-pending_shares = []       # [(to_client, share_message), …]
 
 def deliver_pending(client_id, conn):
     """
@@ -181,6 +174,14 @@ def handle_client(conn, addr):
 
 def run_server():
     """Accept connections forever and spin up handler threads."""
+
+    # --- Networking setup ---
+    HOST, PORT = '127.0.0.1', 65432
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen()
+    log(f"Listening for clients on {HOST}:{PORT}…")
+
     while True:
         conn, addr = server_socket.accept()
         threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
