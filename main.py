@@ -28,6 +28,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 import os
+import server 
 
 HOST, PORT = '127.0.0.1', 65432
 
@@ -128,11 +129,17 @@ class ClientWindow(QWidget):
             self._log("Authenticated successfully.")
 
             # Retrieve each peer’s RSA public key for key‑share encryption
-            all_certs = load_certs()
-            for peer in ('A','B','C'):
+            for peer in ('A', 'B', 'C'):
                 if peer != self.client_id:
-                    cert = x509.load_pem_x509_certificate(all_certs[peer]['cert'])
-                    self.public_keys[peer] = cert.public_key()
+                    self.sock.sendall(f"GET_CERT {peer}".encode())
+                    cert_bytes = self.sock.recv(2048)
+                    try:
+                        cert = x509.load_pem_x509_certificate(cert_bytes)
+                        self.public_keys[peer] = cert.public_key()
+                        self._log(f"Retrieved cert for {peer}")
+                    except Exception as e:
+                        self._log(f"Failed to load cert for {peer}: {e}")
+
 
             # Start listening thread before sending shares
             threading.Thread(target=self._receive_messages, daemon=True).start()
@@ -265,7 +272,6 @@ def regenerate_certs():
 
 def start_server_gui(win):
     """Thread entry‑point: hook server.log_callback → GUI and run server."""
-    import server
     server.log_callback = win.append_log
     server.run_server()
 
