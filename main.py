@@ -14,22 +14,20 @@ Description:
 Date: 21-04-2025
 """
 
-import os
-import sys
-import time
-import socket
-import pickle
-import threading
 
-from PySide6.QtWidgets import (
-    QApplication, QWidget, QTextEdit, QVBoxLayout,
-    QLineEdit, QPushButton, QLabel
-)
+import sys
+import threading
+import time
+import pickle
+import socket
+from PySide6.QtWidgets import (QApplication, QWidget, QTextEdit, QVBoxLayout,
+                               QLineEdit, QPushButton, QLabel)
+from PySide6.QtCore import Qt
+from utils import aes_encrypt, aes_decrypt, hmac_digest, hmac_verify, load_certs, save_certs, build_ca, generate_cert, KEY_SHARE, CHAT
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-
-from utils import aes_encrypt, aes_decrypt, hmac_digest, hmac_verify, load_certs, KEY_SHARE, CHAT
+import os
 
 HOST, PORT = '127.0.0.1', 65432
 
@@ -219,6 +217,52 @@ class ClientWindow(QWidget):
                 self._log(f"Receive loop error: {e}")
                 break
 
+def regenerate_certs():
+    """Generate CA + client/server certs and save them to disk."""
+    ca_key, ca_cert = build_ca()
+    key_a, cert_a = generate_cert("ClientA", ca_key, ca_cert)
+    key_b, cert_b = generate_cert("ClientB", ca_key, ca_cert)
+    key_c, cert_c = generate_cert("ClientC", ca_key, ca_cert)
+    key_s, cert_s = generate_cert("Server", ca_key, ca_cert)
+
+    certs = {
+        "CA": ca_cert.public_bytes(serialization.Encoding.PEM),
+        "A": {
+            "key": key_a.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_a.public_bytes(serialization.Encoding.PEM),
+        },
+        "B": {
+            "key": key_b.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_b.public_bytes(serialization.Encoding.PEM),
+        },
+        "C": {
+            "key": key_c.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_c.public_bytes(serialization.Encoding.PEM),
+        },
+        "S": {
+            "key": key_s.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
+            "cert": cert_s.public_bytes(serialization.Encoding.PEM),
+        },
+    }
+
+    save_certs(certs)
+
 def start_server_gui(win):
     """Thread entry‑point: hook server.log_callback → GUI and run server."""
     import server
@@ -227,6 +271,7 @@ def start_server_gui(win):
 
 def run_ui():
     """Construct GUI windows and launch event loop."""
+    regenerate_certs()
     app = QApplication(sys.argv)
     server_win = ServerWindow()
     clients    = [ClientWindow(c) for c in ('A','B','C')]
