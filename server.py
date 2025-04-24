@@ -151,13 +151,13 @@ def handle_client(conn, addr):
                     dest = msg['to']
                     if dest in active_clients:
                         active_clients[dest].sendall(pickle.dumps(msg))
-                        log(f"Forwarded key share from {msg['from']} to {dest}")
+                        log(f"Forwarded key share from {msg['from']} to {dest}. Raw: {msg}")
                     else:
                         pending_shares.append((dest, msg))
                         log(f"Queued share from {msg['from']} for offline {dest}")
                 elif mtype == CHAT:
                     sender = msg['from']
-                    log(f"Relaying chat from {sender}")
+                    log(f"Relaying chat from {sender}. Raw: {msg}")
                     # Forward to everyone else
                     for cid, sock in active_clients.items():
                         if cid != sender:
